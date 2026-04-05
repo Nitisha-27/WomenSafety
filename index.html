@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Women Safety System</title>
+
+    <link rel="stylesheet" href="/static/style.css">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;600&display=swap" rel="stylesheet">
+</head>
+
+<body>
+
+<div id="particles-js"></div>
+
+<!-- HERO -->
+<div class="hero">
+    <h1>🚨 Safety First</h1>
+    <p>Your life-saving companion</p>
+
+    <button class="mega-sos" onclick="prepareSOS()">🚨 SOS</button>
+
+    <div class="status-box">
+        <span class="status-dot"></span> System Ready
+    </div>
+
+    <div id="clock"></div>
+    <p id="status"></p>
+</div>
+
+<!-- QUICK ACTIONS -->
+<div class="quick-actions">
+    <button class="action-btn" onclick="makeCall()">📞 Call</button>
+    <button class="action-btn" onclick="prepareSOS()">📍 Track</button>
+</div>
+
+<!-- GRID -->
+<div class="main-grid">
+
+    <div class="glass-card">
+        <h2>📲 Send Alert</h2>
+        <div id="contactButtons"></div>
+    </div>
+
+    <div class="glass-card">
+        <h2>📍 Location</h2>
+        <div id="map"></div>
+        <p id="locationText">Location not fetched</p>
+    </div>
+
+    <div class="glass-card">
+        <h2>➕ Add Contact</h2>
+        <input type="text" id="name" placeholder="Name">
+        <input type="text" id="phone" placeholder="Phone">
+        <button onclick="addContact()">Add</button>
+    </div>
+
+    <div class="glass-card">
+        <h2>👥 Contacts</h2>
+        <ul id="contactList"></ul>
+    </div>
+
+</div>
+
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/particles.js"></script>
+
+<script>
+let map, marker, currentLocation = "";
+
+// Map
+function initMap(lat, lon) {
+    if (!map) {
+        map = L.map('map').setView([lat, lon], 15);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+        marker = L.marker([lat, lon]).addTo(map);
+    } else {
+        map.setView([lat, lon], 15);
+        marker.setLatLng([lat, lon]);
+    }
+}
+
+// SOS
+function prepareSOS() {
+    navigator.geolocation.getCurrentPosition(function(pos) {
+
+        let lat = pos.coords.latitude;
+        let lon = pos.coords.longitude;
+
+        currentLocation = `https://www.google.com/maps?q=${lat},${lon}`;
+
+        initMap(lat, lon);
+
+        document.getElementById("locationText").innerText =
+            `Lat: ${lat.toFixed(4)}, Lon: ${lon.toFixed(4)}`;
+
+        loadContactButtons();
+
+        fetch("/sos", {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({lat, lon})
+        });
+
+    });
+}
+
+// Contact Buttons
+function loadContactButtons() {
+    fetch("/get_contacts")
+    .then(res => res.json())
+    .then(data => {
+        let div = document.getElementById("contactButtons");
+        div.innerHTML = "";
+
+        data.forEach(c => {
+            let btn = document.createElement("button");
+            btn.innerText = c[0];
+            btn.className = "contact-btn";
+            btn.onclick = () => sendToContact(c[1]);
+            div.appendChild(btn);
+        });
+    });
+}
+
+// WhatsApp
+function sendToContact(phone) {
+    phone = phone.replace(/\D/g, "");
+    if (!phone.startsWith("91")) phone = "91" + phone;
+
+    let msg = `EMERGENCY ALERT! Location: ${currentLocation}`;
+
+    window.open(`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`);
+}
+
+// Call
+function makeCall() {
+    fetch("/get_contacts")
+    .then(res => res.json())
+    .then(data => {
+        if (data.length > 0) {
+            let phone = data[0][1].replace(/\D/g, "");
+            window.location.href = `tel:${phone}`;
+        }
+    });
+}
+
+// Add Contact
+function addContact() {
+    let name = document.getElementById("name").value;
+    let phone = document.getElementById("phone").value;
+
+    fetch("/add_contact", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({name, phone})
+    }).then(() => loadContacts());
+}
+
+// Load Contacts
+function loadContacts() {
+    fetch("/get_contacts")
+    .then(res => res.json())
+    .then(data => {
+        let list = document.getElementById("contactList");
+        list.innerHTML = "";
+        data.forEach(c => {
+            let li = document.createElement("li");
+            li.innerText = c[0] + " - " + c[1];
+            list.appendChild(li);
+        });
+    });
+}
+
+window.onload = loadContacts;
+
+// Clock
+setInterval(() => {
+    document.getElementById("clock").innerText =
+        new Date().toLocaleTimeString();
+}, 1000);
+
+// Particles
+particlesJS("particles-js", {
+  particles: {
+    number: { value: 60 },
+    size: { value: 3 },
+    move: { speed: 2 }
+  }
+});
+</script>
+
+</body>
+</html>
